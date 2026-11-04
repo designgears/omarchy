@@ -127,6 +127,34 @@ PanelWindow {
     var count = window.dock ? window.dock.itemModel.count : 0
     return Math.max(0, Math.min(count, Math.round((along - first) / window.slotSize)))
   }
+  // The app slot under the pointer, and the one whose tooltip shows once the
+  // pointer has rested on it a moment.
+  property Item hoverSlot: null
+  property Item tipSlot: null
+
+  function hoverChanged(slot, hovered) {
+    if (hovered) {
+      window.hoverSlot = slot
+      if (window.tipSlot) window.tipSlot = slot
+      else tipTimer.restart()
+    } else if (window.hoverSlot === slot) {
+      window.hoverSlot = null
+      tipHideTimer.restart()
+    }
+  }
+
+  Timer {
+    id: tipTimer
+    interval: 450
+    onTriggered: if (window.hoverSlot && !window.menuOpen && !window.dragging) window.tipSlot = window.hoverSlot
+  }
+
+  Timer {
+    id: tipHideTimer
+    interval: 120
+    onTriggered: if (!window.hoverSlot) window.tipSlot = null
+  }
+
   property var menuItem: null
   property Item menuSlot: null
   // The apps button's menu: where the dock sits and whether it hides.
@@ -141,6 +169,7 @@ PanelWindow {
   Component.onCompleted: if (dock) dock.readMode(workspaceId)
 
   function openMenu(item, slot) {
+    window.tipSlot = null
     window.settingsMenu = false
     window.menuItem = item
     window.menuSlot = slot
@@ -446,7 +475,10 @@ PanelWindow {
       return appSlot.mapToItem(body, event.x, event.y)
     }
 
+    onHoveredChanged: window.hoverChanged(appSlot, hovered)
+
     mouse.onPressed: function(event) {
+      window.tipSlot = null
       appSlot.dragged = false
       if (event.button === Qt.LeftButton) appSlot.pressPoint = appSlot.bodyPoint(event)
     }
@@ -690,6 +722,75 @@ PanelWindow {
         visible: menu.running
         text: Commons.I18n.t("dock.quit")
         onTriggered: window.dock.quit(menu.item)
+      }
+    }
+  }
+
+  // The hovered app's name, and the title of each of its windows.
+  BorderSurface {
+    id: tip
+
+    readonly property var item: window.tipSlot ? window.tipSlot.modelData : null
+    readonly property var entry: item && window.dock ? window.dock.entryFor(item) : null
+    readonly property string appName: entry && entry.name ? entry.name : (item ? item.key : "")
+    readonly property var titles: {
+      if (!item) return []
+      var out = []
+      for (var i = 0; i < item.windows.length; i++) {
+        var title = String(item.windows[i].toplevel ? item.windows[i].toplevel.title || "" : "")
+        if (title && title !== appName) out.push(title)
+      }
+      return out
+    }
+    readonly property int maxWidth: Style.space(420)
+    readonly property int textRoom: maxWidth - padding * 2 - Style.spacing.controlPaddingX * 2
+
+    visible: window.contentShown && !!item && !window.menuOpen && !window.dragging
+    width: Math.min(maxWidth, Math.max(tipName.implicitWidth, tipTitles.implicitWidth) + padding * 2 + Style.spacing.controlPaddingX * 2)
+    height: tipColumn.implicitHeight + padding * 2 + Style.spacing.xs * 2
+    x: window.popupX(window.tipSlot, tip)
+    y: window.popupY(window.tipSlot, tip)
+    radius: Style.cornerRadius
+    color: Commons.Color.popups.background
+    borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border, Style.normalBorderWidth)
+    padding: Style.spacing.sm
+
+    Column {
+      id: tipColumn
+      x: tip.contentLeftInset + Style.spacing.controlPaddingX
+      y: tip.contentTopInset + Style.spacing.xs
+      spacing: Style.spacing.xxs
+
+      Text {
+        id: tipName
+        width: Math.min(implicitWidth, tip.textRoom)
+        textFormat: Text.PlainText
+        text: tip.appName
+        elide: Text.ElideRight
+        color: Commons.Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+
+      Column {
+        id: tipTitles
+
+        Repeater {
+          model: tip.titles.slice(0, 8)
+
+          delegate: Text {
+            required property var modelData
+            width: Math.min(implicitWidth, tip.textRoom)
+            textFormat: Text.PlainText
+            text: modelData
+            elide: Text.ElideRight
+            color: Commons.Color.popups.text
+            opacity: 0.75
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+        }
       }
     }
   }
