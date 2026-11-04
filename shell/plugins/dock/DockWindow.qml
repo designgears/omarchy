@@ -43,6 +43,40 @@ PanelWindow {
     return window.themeColor(fallback, "urgent")
   }
 
+  // WCAG 2.x contrast. Text needs 4.5:1 (AA); outlines and other non-text
+  // parts need 3:1 against what they sit next to.
+  readonly property bool ensureContrast: setting("contrast", "enabled", true)
+  readonly property real textContrast: setting("contrast", "text", 4.5)
+  readonly property real partContrast: setting("contrast", "parts", 3)
+
+  function luminance(c) {
+    function channel(v) { return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
+  }
+
+  function contrast(a, b) {
+    var la = luminance(a), lb = luminance(b)
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+  }
+
+  // The preferred color if it reaches the ratio against the other color;
+  // otherwise the theme color that comes closest to it while passing, and
+  // black or white as the last resort (one of them always passes 4.5:1).
+  function readable(preferred, against, ratio) {
+    if (!window.ensureContrast || contrast(preferred, against) >= ratio) return preferred
+    var candidates = [Commons.Color.foreground, Commons.Color.background, Commons.Color.accent,
+      Commons.Color.urgent, Commons.Color.muted, Qt.color("#ffffff"), Qt.color("#000000")]
+    var best = null, bestDistance = 1e9
+    for (var i = 0; i < candidates.length; i++) {
+      var c = candidates[i]
+      if (contrast(c, against) < ratio) continue
+      var distance = Math.abs(c.r - preferred.r) + Math.abs(c.g - preferred.g) + Math.abs(c.b - preferred.b) + (i >= 5 ? 0.5 : 0)
+      if (distance < bestDistance) { best = c; bestDistance = distance }
+    }
+    if (best) return best
+    return contrast(Qt.color("#ffffff"), against) >= contrast(Qt.color("#000000"), against) ? Qt.color("#ffffff") : Qt.color("#000000")
+  }
+
   readonly property bool dotsEnabled: setting("windowDots", "enabled", true)
   readonly property int dotsMax: Math.max(1, setting("windowDots", "max", 3))
   readonly property color dotsColor: setting("windowDots", "color", "") ? themeColor(setting("windowDots", "color", ""), "foreground") : Commons.Color.bar.text
@@ -55,8 +89,10 @@ PanelWindow {
 
   readonly property bool badgesEnabled: setting("badges", "enabled", true)
   readonly property color badgeColor: themeColor(setting("badges", "color", "urgent"), "urgent")
-  readonly property color badgeTextColor: themeColor(setting("badges", "textColor", "background"), "background")
-  readonly property color badgeBorderColor: themeColor(setting("badges", "borderColor", "background"), "background")
+  readonly property color badgeTextColor: readable(themeColor(setting("badges", "textColor", "background"), "background"), badgeColor, textContrast)
+  readonly property color badgeBorderColor: readable(themeColor(setting("badges", "borderColor", "background"), "background"), badgeColor, partContrast)
+  // The dots' outline has to stand apart from the dot itself.
+  readonly property color dotsOutline: readable(Commons.Color.background, dotsColor, partContrast)
   readonly property int badgeBorderWidth: Math.max(0, setting("badges", "borderWidth", 1))
   readonly property real badgeSize: Math.max(0.5, Math.min(2, setting("badges", "size", 1)))
   // top-right, top-left, bottom-right or bottom-left of the icon.
@@ -692,7 +728,7 @@ PanelWindow {
           color: window.dotsColor
           // Outlined, so the dot shows on light and dark wallpapers alike.
           border.width: 1
-          border.color: Qt.rgba(Commons.Color.background.r, Commons.Color.background.g, Commons.Color.background.b, 0.6)
+          border.color: window.dotsOutline
         }
       }
     }
