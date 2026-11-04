@@ -88,7 +88,7 @@ PanelWindow {
   readonly property int attentionPeriod: Math.max(200, setting("attention", "period", 1400))
 
   readonly property bool badgesEnabled: setting("badges", "enabled", true)
-  readonly property color badgeColor: themeColor(setting("badges", "color", "urgent"), "urgent")
+  readonly property color badgeColor: themeColor(setting("badges", "color", "accent"), "accent")
   readonly property color badgeTextColor: readable(themeColor(setting("badges", "textColor", "background"), "background"), badgeColor, textContrast)
   readonly property color badgeBorderColor: readable(themeColor(setting("badges", "borderColor", "background"), "background"), badgeColor, partContrast)
   // The dots' outline has to stand apart from the dot itself.
