@@ -517,6 +517,43 @@ PanelWindow {
       Behavior on scale { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
     }
 
+    // One dot per open window, up to three, on the side of the icon nearest
+    // the screen edge.
+    Grid {
+      id: windowDots
+
+      readonly property int dot: Math.max(4, Math.round(window.iconSize * 0.14))
+      readonly property int edge: Math.max(1, Math.round((window.iconInset - dot) / 2))
+
+      visible: appSlot.windowCount > 0
+      columns: window.vertical ? 1 : 3
+      spacing: Math.max(2, Math.round(dot * 0.6))
+      x: window.position === "left" ? edge
+        : window.position === "right" ? appSlot.width - width - edge
+        : Math.round((appSlot.width - width) / 2)
+      y: window.position === "top" ? edge
+        : window.position === "bottom" ? appSlot.height - height - edge
+        : Math.round((appSlot.height - height) / 2)
+      transform: Translate {
+        x: window.vertical ? 0 : appSlot.displayedShift
+        y: window.vertical ? appSlot.displayedShift : 0
+      }
+
+      Repeater {
+        model: Math.min(3, appSlot.windowCount)
+
+        delegate: Rectangle {
+          width: windowDots.dot
+          height: windowDots.dot
+          radius: width / 2
+          color: Commons.Color.bar.text
+          // Outlined, so the dot shows on light and dark wallpapers alike.
+          border.width: 1
+          border.color: Qt.rgba(0, 0, 0, 0.55)
+        }
+      }
+    }
+
     // With animations off it holds still rather than spinning through
     // zero-length steps.
     SequentialAnimation {
