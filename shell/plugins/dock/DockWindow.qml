@@ -824,8 +824,10 @@ PanelWindow {
     readonly property bool running: !!item && item.windows.length > 0
 
     visible: window.contentShown && (!!item || window.settingsMenu)
-    width: Math.max(Style.space(140), menuColumn.implicitWidth) + padding * 2
-    height: menuColumn.implicitHeight + padding * 2
+    // Sized by the content insets (padding plus border), so the space below
+    // the last row matches the space above the first.
+    width: Math.max(Style.space(140), menuColumn.implicitWidth) + contentLeftInset + contentRightInset
+    height: menuColumn.implicitHeight + contentTopInset + contentBottomInset
     x: window.popupX(window.menuSlot, menu)
     y: window.popupY(window.menuSlot, menu)
     radius: Style.cornerRadius
@@ -898,7 +900,7 @@ PanelWindow {
 
     visible: window.contentShown && !!item && !window.menuOpen && !window.dragging
     width: Math.min(maxWidth, Math.max(tipName.implicitWidth, tipTitles.implicitWidth) + padding * 2 + Style.spacing.controlPaddingX * 2)
-    height: tipColumn.implicitHeight + padding * 2 + Style.spacing.xs * 2
+    height: tipColumn.implicitHeight + contentTopInset + contentBottomInset + Style.spacing.xs * 2
     x: window.popupX(window.tipSlot, tip, window.popClearance)
     y: window.popupY(window.tipSlot, tip, window.popClearance)
     radius: Style.cornerRadius
