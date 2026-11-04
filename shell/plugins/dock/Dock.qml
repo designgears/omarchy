@@ -19,7 +19,25 @@ Item {
   // "menu" plugins are), so the app grid gets its own copy of the service.
   readonly property var appLibrary: shell && shell.appLibrary ? shell.appLibrary : localAppLibrary
   OmarchyServices.AppLibrary { id: localAppLibrary }
-  readonly property var dockConfig: shell && shell.shellConfig && shell.shellConfig.dock ? shell.shellConfig.dock : ({})
+  // A user plugin's view of the shell config comes through empty, so the
+  // dock reads its section of shell.json itself and follows edits to it.
+  readonly property var dockConfig: shell && shell.shellConfig && shell.shellConfig.dock ? shell.shellConfig.dock : fileDockConfig
+  property var fileDockConfig: ({})
+
+  FileView {
+    id: shellJson
+    path: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
+    watchChanges: true
+    onFileChanged: reload()
+    onLoaded: {
+      try {
+        var parsed = JSON.parse(text())
+        root.fileDockConfig = parsed && parsed.dock && typeof parsed.dock === "object" ? parsed.dock : ({})
+      } catch (e) {
+        // Mid-write or invalid: keep the last good settings.
+      }
+    }
+  }
   readonly property var defaultDockConfig: shell && shell.defaultsConfig && shell.defaultsConfig.dock ? shell.defaultsConfig.dock : ({})
   readonly property string position: DockModel.normalizePosition(dockConfig.position)
   readonly property bool vertical: DockModel.isVertical(position)

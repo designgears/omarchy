@@ -105,6 +105,13 @@ PanelWindow {
   readonly property int previewsMax: Math.max(1, setting("tooltip", "maxPreviews", 6))
   // A slim frame around each preview, so a window the same color as the
   // popup still reads as a window.
+  // "hover" shows each preview's close button while the pointer is on it,
+  // "always" keeps it shown, "off" hides it.
+  readonly property string previewClose: setting("tooltip", "closeButton", "hover")
+  readonly property color closeFill: Commons.Color.popups.background
+  readonly property color closeGlyph: readable(Commons.Color.foreground, closeFill, textContrast)
+  readonly property color closeHoverFill: Commons.Color.urgent
+  readonly property color closeHoverGlyph: readable(Commons.Color.background, closeHoverFill, textContrast)
   readonly property int previewBorderWidth: Math.max(0, setting("tooltip", "previewBorderWidth", 1))
   readonly property color previewBorderColor: readable(themeColor(setting("tooltip", "previewBorderColor", "muted"), "muted"), Commons.Color.popups.background, partContrast)
 
@@ -1012,6 +1019,53 @@ PanelWindow {
         if (!target || !window.dock) return
         if (event.button === Qt.MiddleButton) target.toplevel.close()
         else window.dock.bringForward(target)
+      }
+    }
+
+    // Closes this window. Sits over the preview's top right corner.
+    Rectangle {
+      id: closeButton
+
+      readonly property int size: Math.max(16, Math.round(window.previewHeight * 0.16))
+      readonly property bool shown: window.previewsEnabled && window.previewClose !== "off"
+        && (window.previewClose === "always" || cardMouse.containsMouse || closeMouse.containsMouse)
+
+      visible: shown
+      width: size
+      height: size
+      radius: size / 2
+      x: Style.spacing.xs + card.thumbWidth - size - Style.spacing.xs
+      y: Style.spacing.xs + Style.spacing.xs
+      z: 3
+      color: closeMouse.containsMouse ? window.closeHoverFill : window.closeFill
+      border.width: 1
+      border.color: window.previewBorderColor
+
+      // An X drawn from two bars, so it stays crisp at any size.
+      Repeater {
+        model: [45, -45]
+
+        delegate: Rectangle {
+          required property var modelData
+          anchors.centerIn: parent
+          width: Math.round(closeButton.size * 0.5)
+          height: Math.max(1.5, closeButton.size * 0.1)
+          radius: height / 2
+          rotation: modelData
+          antialiasing: true
+          color: closeMouse.containsMouse ? window.closeHoverGlyph : window.closeGlyph
+        }
+      }
+
+      MouseArea {
+        id: closeMouse
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: {
+          var target = card.modelData
+          if (target && target.toplevel) target.toplevel.close()
+        }
       }
     }
   }
