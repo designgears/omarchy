@@ -57,7 +57,10 @@ PanelWindow {
   readonly property real idleOpacity: 0.7
   // Room inward of the dock for its menus: the tallest, the apps button's,
   // has five rows.
-  readonly property int popupRoom: Style.spacing.popupRowHeight * 5 + Style.spacing.sm * 2 + Style.normalBorderWidth * 2 + gap * 2
+  readonly property int popupRoom: Math.max(Style.spacing.popupRowHeight * 5 + Style.spacing.sm * 2 + Style.normalBorderWidth * 2,
+    previewHeight + Style.font.body * 4 + Style.spacing.sm * 6) + gap * 2
+  // Window previews in the hover popup are this tall; width follows the window.
+  readonly property int previewHeight: Math.round(140 * Style.fontScale)
   // Icons pop away from the screen edge.
   readonly property int popOrigin: position === "top" ? Item.Top
     : position === "left" ? Item.Left
@@ -152,7 +155,7 @@ PanelWindow {
   Timer {
     id: tipHideTimer
     interval: 120
-    onTriggered: if (!window.hoverSlot) window.tipSlot = null
+    onTriggered: if (!window.hoverSlot && !tipHover.hovered) window.tipSlot = null
   }
 
   property var menuItem: null
@@ -243,6 +246,7 @@ PanelWindow {
 
     Region { item: window.shown && window.autohide ? edgeTrigger : null }
     Region { item: menu.visible ? menu : null }
+    Region { item: tip.visible ? tip : null }
   }
 
   onAutohideChanged: window.revealed = false
@@ -733,16 +737,8 @@ PanelWindow {
     readonly property var item: window.tipSlot ? window.tipSlot.modelData : null
     readonly property var entry: item && window.dock ? window.dock.entryFor(item) : null
     readonly property string appName: entry && entry.name ? entry.name : (item ? item.key : "")
-    readonly property var titles: {
-      if (!item) return []
-      var out = []
-      for (var i = 0; i < item.windows.length; i++) {
-        var title = String(item.windows[i].toplevel ? item.windows[i].toplevel.title || "" : "")
-        if (title && title !== appName) out.push(title)
-      }
-      return out
-    }
-    readonly property int maxWidth: Style.space(420)
+    readonly property var windows: item ? item.windows.slice(0, 6) : []
+    readonly property int maxWidth: window.width - window.gap * 2
     readonly property int textRoom: maxWidth - padding * 2 - Style.spacing.controlPaddingX * 2
 
     visible: window.contentShown && !!item && !window.menuOpen && !window.dragging
@@ -773,24 +769,99 @@ PanelWindow {
         font.bold: true
       }
 
-      Column {
+      Row {
         id: tipTitles
+        spacing: Style.spacing.sm
 
         Repeater {
-          model: tip.titles.slice(0, 8)
+          model: tip.windows
 
-          delegate: Text {
-            required property var modelData
-            width: Math.min(implicitWidth, tip.textRoom)
-            textFormat: Text.PlainText
-            text: modelData
-            elide: Text.ElideRight
-            color: Commons.Color.popups.text
-            opacity: 0.75
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-          }
+          delegate: PreviewCard {}
         }
+      }
+    }
+
+    HoverHandler {
+      id: tipHover
+      onHoveredChanged: if (!hovered) tipHideTimer.restart()
+    }
+  }
+
+  // A live thumbnail of one window and its title; clicking it brings that
+  // window forward.
+  component PreviewCard: Rectangle {
+    id: card
+
+    required property var modelData
+    readonly property var toplevel: modelData ? modelData.toplevel : null
+    readonly property real aspect: preview.sourceSize.height > 0 ? preview.sourceSize.width / preview.sourceSize.height : 16 / 10
+    readonly property int thumbWidth: Math.max(Math.round(window.previewHeight * 0.6), Math.min(Math.round(window.previewHeight * 2.2), Math.round(window.previewHeight * aspect)))
+
+    width: thumbWidth + Style.spacing.xs * 2
+    height: cardColumn.implicitHeight + Style.spacing.xs * 2
+    radius: Style.cornerRadius
+    color: cardMouse.containsMouse ? Style.hoverFill : "transparent"
+    border.width: card.modelData && card.modelData.urgent ? Math.max(1, Style.space(2)) : 0
+    border.color: "#f04a4a"
+
+    Column {
+      id: cardColumn
+      x: Style.spacing.xs
+      y: Style.spacing.xs
+      spacing: Style.spacing.xxs
+
+      Item {
+        width: card.thumbWidth
+        height: window.previewHeight
+
+        ScreencopyView {
+          id: preview
+          anchors.fill: parent
+          captureSource: tip.visible ? card.toplevel : null
+          live: tip.visible
+          paintCursor: false
+          visible: hasContent
+        }
+
+        // Minimized windows, and any the compositor won't capture, show the
+        // app icon instead.
+        Image {
+          visible: !preview.hasContent
+          anchors.centerIn: parent
+          width: Math.round(window.previewHeight * 0.4)
+          height: width
+          sourceSize: Qt.size(width * 2, height * 2)
+          source: window.dock && tip.item ? window.dock.iconFor(tip.item) : ""
+          fillMode: Image.PreserveAspectFit
+          opacity: 0.6
+        }
+      }
+
+      Text {
+        width: card.thumbWidth
+        textFormat: Text.PlainText
+        text: card.toplevel && card.toplevel.title ? card.toplevel.title : tip.appName
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignHCenter
+        color: Commons.Color.popups.text
+        opacity: 0.8
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+      }
+    }
+
+    MouseArea {
+      id: cardMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+      onClicked: function(event) {
+        var target = card.modelData
+        window.tipSlot = null
+        if (!target || !window.dock) return
+        if (event.button === Qt.MiddleButton) target.toplevel.close()
+        else window.dock.bringForward(target)
       }
     }
   }
