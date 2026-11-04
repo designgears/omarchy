@@ -315,6 +315,20 @@ Item {
     for (var i = 0; i < windows.length; i++) windows[i].toplevel.close()
   }
 
+  // Kills the processes behind the app's windows outright (SIGKILL), for an
+  // app that won't respond to Quit.
+  function forceQuit(item) {
+    if (!item) return
+    var addresses = item.windows.map(function(w) {
+      var address = String(w.address || "")
+      return address.indexOf("0x") === 0 ? address : "0x" + address
+    }).filter(function(address) { return address.length > 2 })
+    if (addresses.length === 0) return
+    var filter = addresses.map(function(a) { return ".address == " + JSON.stringify(a) }).join(" or ")
+    Util.execDetached("hyprctl clients -j | jq -r " + Util.shellQuote(".[] | select(" + filter + ") | .pid")
+      + " | sort -u | xargs -r kill -KILL")
+  }
+
   function openApps() {
     appGrid.open()
   }

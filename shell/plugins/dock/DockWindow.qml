@@ -876,6 +876,12 @@ PanelWindow {
         text: Commons.I18n.t("dock.quit")
         onTriggered: window.dock.quit(menu.item)
       }
+
+      MenuRow {
+        visible: menu.running
+        text: "Force Quit"
+        onTriggered: window.dock.forceQuit(menu.item)
+      }
     }
   }
 
