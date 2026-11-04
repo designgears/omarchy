@@ -149,7 +149,7 @@ PanelWindow {
   // Room inward of the dock for its menus: the tallest, the apps button's,
   // has five rows.
   readonly property int popupRoom: Math.max(Style.spacing.popupRowHeight * 5 + Style.spacing.sm * 2 + Style.normalBorderWidth * 2,
-    previewHeight + Style.font.body * 4 + Style.spacing.sm * 6) + gap * 2
+    previewHeight + Style.font.body * 4 + Style.spacing.sm * 6 + popClearance) + gap * 2
   // Window previews in the hover popup are this tall; width follows the window.
   readonly property int previewHeight: Math.round(140 * Style.fontScale)
   // Icons pop away from the screen edge.
@@ -295,20 +295,28 @@ PanelWindow {
     if (window.autohide) hideTimer.restart()
   }
 
-  // Places the menu inward of the dock, centered on a slot.
-  function popupX(slot, popup) {
+  // How far an icon reaches past its slot when it pops on hover, with its
+  // unread badge on top; the hover popup stays clear of both.
+  readonly property int popClearance: Math.round(window.iconSize * 0.15)
+    + Math.round(Math.max(10, window.iconSize * 0.42 * window.badgeSize) * 0.35 * 1.15)
+
+  // Places the menu inward of the dock, centered on a slot. Extra pushes it
+  // further away from the dock.
+  function popupX(slot, popup, extra) {
     if (!slot) return 0
+    var more = extra || 0
     var center = slot.mapToItem(window.contentItem, slot.width / 2, 0).x
-    if (window.position === "left") return body.x + body.width + window.gap
-    if (window.position === "right") return body.x - window.gap - popup.width
+    if (window.position === "left") return body.x + body.width + window.gap + more
+    if (window.position === "right") return body.x - window.gap - popup.width - more
     return Math.max(window.gap, Math.min(window.width - popup.width - window.gap, center - popup.width / 2))
   }
 
-  function popupY(slot, popup) {
+  function popupY(slot, popup, extra) {
     if (!slot) return 0
+    var more = extra || 0
     var center = slot.mapToItem(window.contentItem, 0, slot.height / 2).y
-    if (window.position === "top") return body.y + body.height + window.gap
-    if (window.position === "bottom") return body.y - window.gap - popup.height
+    if (window.position === "top") return body.y + body.height + window.gap + more
+    if (window.position === "bottom") return body.y - window.gap - popup.height - more
     return Math.max(window.gap, Math.min(window.height - popup.height - window.gap, center - popup.height / 2))
   }
 
@@ -866,8 +874,8 @@ PanelWindow {
     visible: window.contentShown && !!item && !window.menuOpen && !window.dragging
     width: Math.min(maxWidth, Math.max(tipName.implicitWidth, tipTitles.implicitWidth) + padding * 2 + Style.spacing.controlPaddingX * 2)
     height: tipColumn.implicitHeight + padding * 2 + Style.spacing.xs * 2
-    x: window.popupX(window.tipSlot, tip)
-    y: window.popupY(window.tipSlot, tip)
+    x: window.popupX(window.tipSlot, tip, window.popClearance)
+    y: window.popupY(window.tipSlot, tip, window.popClearance)
     radius: Style.cornerRadius
     color: Commons.Color.popups.background
     borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border, Style.normalBorderWidth)
