@@ -1032,11 +1032,15 @@ PanelWindow {
       cursorShape: Qt.PointingHandCursor
       acceptedButtons: Qt.LeftButton | Qt.MiddleButton
       onClicked: function(event) {
+        // Act before closing the popup: closing it destroys this card.
         var target = card.modelData
-        window.tipSlot = null
-        if (!target || !window.dock) return
-        if (event.button === Qt.MiddleButton) target.toplevel.close()
-        else window.dock.bringForward(target)
+        var dock = window.dock
+        var host = window
+        if (target && dock) {
+          if (event.button === Qt.MiddleButton) target.toplevel.close()
+          else dock.bringForward(target)
+        }
+        host.tipSlot = null
       }
     }
 
