@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
@@ -18,6 +19,48 @@ PanelWindow {
 
 
   property var dock: null
+
+  // Feature settings, from the "dock" section of ~/.config/omarchy/shell.json.
+  // Each falls back to its default when missing or of the wrong type.
+  readonly property var config: dock && dock.dockConfig ? dock.dockConfig : ({})
+
+  function setting(group, key, fallback) {
+    var section = window.config[group]
+    var value = section && typeof section === "object" ? section[key] : undefined
+    return value === undefined || value === null || typeof value !== typeof fallback ? fallback : value
+  }
+
+  // A theme role (urgent, accent, foreground, background, muted) or any
+  // color Qt understands, such as "#ff5555".
+  function themeColor(value, fallback) {
+    var role = String(value || "").toLowerCase()
+    if (role === "urgent") return Commons.Color.urgent
+    if (role === "accent") return Commons.Color.accent
+    if (role === "foreground" || role === "text") return Commons.Color.foreground
+    if (role === "background") return Commons.Color.background
+    if (role === "muted") return Commons.Color.muted
+    if (role && Qt.colorEqual(role, role)) return role
+    return window.themeColor(fallback, "urgent")
+  }
+
+  readonly property bool dotsEnabled: setting("windowDots", "enabled", true)
+  readonly property int dotsMax: Math.max(1, setting("windowDots", "max", 3))
+  readonly property color dotsColor: setting("windowDots", "color", "") ? themeColor(setting("windowDots", "color", ""), "foreground") : Commons.Color.bar.text
+
+  // "pulse" brightens the icon, "tint" pulses it toward the color, "glow"
+  // pulses a colored backdrop behind it, "off" shows nothing.
+  readonly property string attentionStyle: setting("attention", "style", "pulse")
+  readonly property color attentionColor: themeColor(setting("attention", "color", "urgent"), "urgent")
+  readonly property int attentionPeriod: Math.max(200, setting("attention", "period", 1400))
+
+  readonly property bool badgesEnabled: setting("badges", "enabled", true)
+  readonly property color badgeColor: themeColor(setting("badges", "color", "urgent"), "urgent")
+  readonly property color badgeTextColor: themeColor(setting("badges", "textColor", "background"), "background")
+
+  readonly property bool tooltipEnabled: setting("tooltip", "enabled", true)
+  readonly property int tooltipDelay: Math.max(0, setting("tooltip", "delay", 450))
+  readonly property bool previewsEnabled: setting("tooltip", "previews", true)
+  readonly property int previewsMax: Math.max(1, setting("tooltip", "maxPreviews", 6))
 
   readonly property string position: dock ? dock.position : "bottom"
   readonly property bool vertical: dock ? dock.vertical : false
@@ -154,8 +197,8 @@ PanelWindow {
 
   Timer {
     id: tipTimer
-    interval: 450
-    onTriggered: if (window.hoverSlot && !window.menuOpen && !window.dragging) window.tipSlot = window.hoverSlot
+    interval: window.tooltipDelay
+    onTriggered: if (window.tooltipEnabled && window.hoverSlot && !window.menuOpen && !window.dragging) window.tipSlot = window.hoverSlot
   }
 
   Timer {
@@ -453,8 +496,7 @@ PanelWindow {
     property bool dragged: false
     readonly property int windowCount: modelData ? modelData.windows.length : 0
     readonly property bool urgent: !!modelData && modelData.windows.some(function(w) { return w.urgent })
-    // The theme's urgent color, for attention and unread counts.
-    readonly property color attentionColor: Commons.Color.urgent
+    readonly property color attentionColor: window.attentionColor
     property real glow: 0
     readonly property int unread: window.dock ? window.dock.badgeFor(key) : 0
     property real pulse: 1
@@ -540,8 +582,8 @@ PanelWindow {
       else window.dock.activate(appSlot.modelData)
     }
 
-    // An app asking for attention gets a pulsing glow behind its icon until
-    // one of its windows is focused.
+    // An app asking for attention pulses until one of its windows is focused:
+    // the icon itself (pulse, tint), or a backdrop behind it (glow).
     Rectangle {
       // Kept clear of the window dots below the icon.
       readonly property int pad: Math.max(2, Math.round(window.iconInset / 2))
@@ -550,7 +592,7 @@ PanelWindow {
       width: window.iconSize + pad * 2
       height: window.iconSize + pad * 2
       radius: Style.cornerRadius + Math.round(window.iconInset / 3)
-      visible: appSlot.urgent
+      visible: appSlot.urgent && window.attentionStyle === "glow"
       color: Qt.rgba(appSlot.attentionColor.r, appSlot.attentionColor.g, appSlot.attentionColor.b, 0.25 + 0.35 * appSlot.glow)
       border.width: Math.max(1, Style.space(2))
       border.color: appSlot.attentionColor
@@ -561,12 +603,12 @@ PanelWindow {
     }
 
     SequentialAnimation {
-      running: appSlot.urgent && !Style.reduceMotion
+      running: appSlot.urgent && window.attentionStyle !== "off" && !Style.reduceMotion
       loops: Animation.Infinite
       onRunningChanged: if (!running) appSlot.glow = Style.reduceMotion ? 1 : 0
 
-      NumberAnimation { target: appSlot; property: "glow"; from: 0; to: 1; duration: Style.duration(700); easing.type: Easing.InOutSine }
-      NumberAnimation { target: appSlot; property: "glow"; to: 0; duration: Style.duration(700); easing.type: Easing.InOutSine }
+      NumberAnimation { target: appSlot; property: "glow"; from: 0; to: 1; duration: Style.duration(window.attentionPeriod / 2); easing.type: Easing.InOutSine }
+      NumberAnimation { target: appSlot; property: "glow"; to: 0; duration: Style.duration(window.attentionPeriod / 2); easing.type: Easing.InOutSine }
     }
 
     // Running apps are drawn in full, pinned ones that are not running faded,
@@ -592,6 +634,14 @@ PanelWindow {
       transformOrigin: window.popOrigin
 
       Behavior on scale { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
+
+      readonly property bool effectOn: appSlot.urgent && (window.attentionStyle === "pulse" || window.attentionStyle === "tint")
+      layer.enabled: effectOn
+      layer.effect: MultiEffect {
+        brightness: window.attentionStyle === "pulse" ? 0.45 * appSlot.glow : 0
+        colorization: window.attentionStyle === "tint" ? 0.75 * appSlot.glow : 0
+        colorizationColor: appSlot.attentionColor
+      }
     }
 
     // One dot per open window, up to three, on the side of the icon nearest
@@ -604,10 +654,10 @@ PanelWindow {
       // Centered in the space between the icon and the dock's edge.
       readonly property int edge: Math.max(1, Math.round((window.iconInset + window.dotRoom - dot) / 2))
 
-      visible: appSlot.windowCount > 0
+      visible: window.dotsEnabled && appSlot.windowCount > 0
       // Only as many columns as dots: an empty column still takes up spacing
       // and would pull the dots off center.
-      columns: window.vertical ? 1 : Math.max(1, Math.min(3, appSlot.windowCount))
+      columns: window.vertical ? 1 : Math.max(1, Math.min(window.dotsMax, appSlot.windowCount))
       spacing: Math.max(2, Math.round(dot * 0.6))
       x: window.position === "left" ? edge
         : window.position === "right" ? appSlot.width - width - edge
@@ -621,13 +671,13 @@ PanelWindow {
       }
 
       Repeater {
-        model: Math.min(3, appSlot.windowCount)
+        model: Math.min(window.dotsMax, appSlot.windowCount)
 
         delegate: Rectangle {
           width: windowDots.dot
           height: windowDots.dot
           radius: width / 2
-          color: Commons.Color.bar.text
+          color: window.dotsColor
           // Outlined, so the dot shows on light and dark wallpapers alike.
           border.width: 1
           border.color: Qt.rgba(Commons.Color.background.r, Commons.Color.background.g, Commons.Color.background.b, 0.6)
@@ -641,11 +691,11 @@ PanelWindow {
 
       readonly property int size: Math.max(14, Math.round(window.iconSize * 0.42))
 
-      visible: appSlot.unread > 0
+      visible: window.badgesEnabled && appSlot.unread > 0
       height: size
       width: Math.max(size, unreadText.implicitWidth + Math.round(size * 0.5))
       radius: size / 2
-      color: appSlot.attentionColor
+      color: window.badgeColor
       border.width: 1
       border.color: Qt.rgba(Commons.Color.background.r, Commons.Color.background.g, Commons.Color.background.b, 0.5)
       x: window.iconX + window.iconSize - width + Math.round(size * 0.35)
@@ -661,7 +711,7 @@ PanelWindow {
         anchors.centerIn: parent
         textFormat: Text.PlainText
         text: appSlot.unread > 99 ? "99+" : String(appSlot.unread)
-        color: Commons.Color.background
+        color: window.badgeTextColor
         font.family: Style.font.family
         font.pixelSize: Math.round(unreadBadge.size * 0.68)
         font.bold: true
@@ -750,7 +800,7 @@ PanelWindow {
     readonly property var item: window.tipSlot ? window.tipSlot.modelData : null
     readonly property var entry: item && window.dock ? window.dock.entryFor(item) : null
     readonly property string appName: entry && entry.name ? entry.name : (item ? item.key : "")
-    readonly property var windows: item ? item.windows.slice(0, 6) : []
+    readonly property var windows: item ? item.windows.slice(0, window.previewsMax) : []
     readonly property int maxWidth: window.width - window.gap * 2
     readonly property int textRoom: maxWidth - padding * 2 - Style.spacing.controlPaddingX * 2
 
@@ -782,9 +832,11 @@ PanelWindow {
         font.bold: true
       }
 
-      Row {
+      // Previews side by side, or with previews off, titles one per line.
+      Grid {
         id: tipTitles
-        spacing: Style.spacing.sm
+        columns: window.previewsEnabled ? Math.max(1, tip.windows.length) : 1
+        spacing: window.previewsEnabled ? Style.spacing.sm : 0
 
         Repeater {
           model: tip.windows
@@ -810,7 +862,8 @@ PanelWindow {
     readonly property real aspect: preview.sourceSize.height > 0 ? preview.sourceSize.width / preview.sourceSize.height : 16 / 10
     readonly property int thumbWidth: Math.max(Math.round(window.previewHeight * 0.6), Math.min(Math.round(window.previewHeight * 2.2), Math.round(window.previewHeight * aspect)))
 
-    width: thumbWidth + Style.spacing.xs * 2
+    readonly property int textWidth: window.previewsEnabled ? thumbWidth : Math.min(cardTitle.implicitWidth, tip.textRoom)
+    width: textWidth + Style.spacing.xs * 2
     height: cardColumn.implicitHeight + Style.spacing.xs * 2
     radius: Style.cornerRadius
     color: cardMouse.containsMouse ? Style.hoverFill : "transparent"
@@ -824,14 +877,15 @@ PanelWindow {
       spacing: Style.spacing.xxs
 
       Item {
+        visible: window.previewsEnabled
         width: card.thumbWidth
         height: window.previewHeight
 
         ScreencopyView {
           id: preview
           anchors.fill: parent
-          captureSource: tip.visible ? card.toplevel : null
-          live: tip.visible
+          captureSource: tip.visible && window.previewsEnabled ? card.toplevel : null
+          live: tip.visible && window.previewsEnabled
           paintCursor: false
           visible: hasContent
         }
@@ -851,11 +905,12 @@ PanelWindow {
       }
 
       Text {
-        width: card.thumbWidth
+        id: cardTitle
+        width: card.textWidth
         textFormat: Text.PlainText
         text: card.toplevel && card.toplevel.title ? card.toplevel.title : tip.appName
         elide: Text.ElideRight
-        horizontalAlignment: Text.AlignHCenter
+        horizontalAlignment: window.previewsEnabled ? Text.AlignHCenter : Text.AlignLeft
         color: Commons.Color.popups.text
         opacity: 0.8
         font.family: Style.font.family
