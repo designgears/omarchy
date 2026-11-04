@@ -56,6 +56,12 @@ PanelWindow {
   readonly property bool badgesEnabled: setting("badges", "enabled", true)
   readonly property color badgeColor: themeColor(setting("badges", "color", "urgent"), "urgent")
   readonly property color badgeTextColor: themeColor(setting("badges", "textColor", "background"), "background")
+  readonly property color badgeBorderColor: themeColor(setting("badges", "borderColor", "background"), "background")
+  readonly property int badgeBorderWidth: Math.max(0, setting("badges", "borderWidth", 1))
+  readonly property real badgeSize: Math.max(0.5, Math.min(2, setting("badges", "size", 1)))
+  // top-right, top-left, bottom-right or bottom-left of the icon.
+  readonly property string badgeCorner: setting("badges", "position", "top-right")
+  readonly property int badgeMax: Math.max(1, setting("badges", "max", 99))
 
   readonly property bool tooltipEnabled: setting("tooltip", "enabled", true)
   readonly property int tooltipDelay: Math.max(0, setting("tooltip", "delay", 450))
@@ -499,6 +505,14 @@ PanelWindow {
     readonly property color attentionColor: window.attentionColor
     property real glow: 0
     readonly property int unread: window.dock ? window.dock.badgeFor(key) : 0
+    // The icon pops on hover; the badge scales from the same point so it
+    // rides along with it.
+    property real iconScale: lifted || hovered ? 1.15 : 1
+    Behavior on iconScale { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
+    readonly property point popPoint: window.position === "top" ? Qt.point(window.iconX + window.iconSize / 2, window.iconY)
+      : window.position === "left" ? Qt.point(window.iconX, window.iconY + window.iconSize / 2)
+      : window.position === "right" ? Qt.point(window.iconX + window.iconSize, window.iconY + window.iconSize / 2)
+      : Qt.point(window.iconX + window.iconSize / 2, window.iconY + window.iconSize)
     property real pulse: 1
 
     // Slots between where the dragged app was and where it would land step
@@ -630,10 +644,8 @@ PanelWindow {
         x: window.vertical ? 0 : appSlot.displayedShift
         y: window.vertical ? appSlot.displayedShift : 0
       }
-      scale: appSlot.lifted || appSlot.hovered ? 1.15 : 1
+      scale: appSlot.iconScale
       transformOrigin: window.popOrigin
-
-      Behavior on scale { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
 
       readonly property bool effectOn: appSlot.urgent && (window.attentionStyle === "pulse" || window.attentionStyle === "tint")
       layer.enabled: effectOn
@@ -689,28 +701,39 @@ PanelWindow {
     Rectangle {
       id: unreadBadge
 
-      readonly property int size: Math.max(14, Math.round(window.iconSize * 0.42))
+      readonly property int size: Math.max(10, Math.round(window.iconSize * 0.42 * window.badgeSize))
+      readonly property bool atRight: window.badgeCorner.indexOf("left") < 0
+      readonly property bool atTop: window.badgeCorner.indexOf("bottom") < 0
+      readonly property int overhang: Math.round(size * 0.35)
 
       visible: window.badgesEnabled && appSlot.unread > 0
       height: size
       width: Math.max(size, unreadText.implicitWidth + Math.round(size * 0.5))
       radius: size / 2
       color: window.badgeColor
-      border.width: 1
-      border.color: Qt.rgba(Commons.Color.background.r, Commons.Color.background.g, Commons.Color.background.b, 0.5)
-      x: window.iconX + window.iconSize - width + Math.round(size * 0.35)
-      y: window.iconY - Math.round(size * 0.35)
+      border.width: window.badgeBorderWidth
+      border.color: window.badgeBorderColor
+      x: atRight ? window.iconX + window.iconSize - width + overhang : window.iconX - overhang
+      y: atTop ? window.iconY - overhang : window.iconY + window.iconSize - height + overhang
       z: 2
-      transform: Translate {
-        x: window.vertical ? 0 : appSlot.displayedShift
-        y: window.vertical ? appSlot.displayedShift : 0
-      }
+      transform: [
+        Scale {
+          origin.x: appSlot.popPoint.x - unreadBadge.x
+          origin.y: appSlot.popPoint.y - unreadBadge.y
+          xScale: appSlot.iconScale
+          yScale: appSlot.iconScale
+        },
+        Translate {
+          x: window.vertical ? 0 : appSlot.displayedShift
+          y: window.vertical ? appSlot.displayedShift : 0
+        }
+      ]
 
       Text {
         id: unreadText
         anchors.centerIn: parent
         textFormat: Text.PlainText
-        text: appSlot.unread > 99 ? "99+" : String(appSlot.unread)
+        text: appSlot.unread > window.badgeMax ? window.badgeMax + "+" : String(appSlot.unread)
         color: window.badgeTextColor
         font.family: Style.font.family
         font.pixelSize: Math.round(unreadBadge.size * 0.68)
