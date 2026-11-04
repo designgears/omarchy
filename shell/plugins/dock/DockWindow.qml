@@ -413,6 +413,10 @@ PanelWindow {
     property point pressPoint
     property bool dragged: false
     readonly property int windowCount: modelData ? modelData.windows.length : 0
+    readonly property bool urgent: !!modelData && modelData.windows.some(function(w) { return w.urgent })
+    // A fixed red, because some themes' urgent color is too muted to catch the eye.
+    readonly property color attentionColor: "#f04a4a"
+    property real glow: 0
     property real pulse: 1
 
     // Slots between where the dragged app was and where it would land step
@@ -491,6 +495,33 @@ PanelWindow {
       window.closeMenu()
       if (event.button === Qt.MiddleButton) window.dock.launch(appSlot.modelData)
       else window.dock.activate(appSlot.modelData)
+    }
+
+    // An app asking for attention gets a pulsing glow behind its icon until
+    // one of its windows is focused.
+    Rectangle {
+      x: Math.round(window.iconInset / 3)
+      y: Math.round(window.iconInset / 3)
+      width: appSlot.width - x * 2
+      height: appSlot.height - y * 2
+      radius: Style.cornerRadius + Math.round(window.iconInset / 3)
+      visible: appSlot.urgent
+      color: Qt.rgba(appSlot.attentionColor.r, appSlot.attentionColor.g, appSlot.attentionColor.b, 0.25 + 0.35 * appSlot.glow)
+      border.width: Math.max(1, Style.space(2))
+      border.color: appSlot.attentionColor
+      transform: Translate {
+        x: window.vertical ? 0 : appSlot.displayedShift
+        y: window.vertical ? appSlot.displayedShift : 0
+      }
+    }
+
+    SequentialAnimation {
+      running: appSlot.urgent && !Style.reduceMotion
+      loops: Animation.Infinite
+      onRunningChanged: if (!running) appSlot.glow = Style.reduceMotion ? 1 : 0
+
+      NumberAnimation { target: appSlot; property: "glow"; from: 0; to: 1; duration: Style.duration(700); easing.type: Easing.InOutSine }
+      NumberAnimation { target: appSlot; property: "glow"; to: 0; duration: Style.duration(700); easing.type: Easing.InOutSine }
     }
 
     // Running apps are drawn in full, pinned ones that are not running faded,

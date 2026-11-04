@@ -78,11 +78,32 @@ Item {
         workspaceId: workspace ? workspace.id : -1,
         minimized: !!workspace && DockModel.isMinimizedWorkspace(workspace.name),
         address: toplevels[i].address,
+        urgent: !!root.urgentAddresses[root.bareAddress(toplevels[i].address)],
+        title: toplevel.title || "",
         toplevel: toplevel
       })
     }
 
     return DockModel.orderItems(DockModel.buildItems(pinned, windows), root.order)
+  }
+
+  // Windows that asked for attention (Hyprland's "urgent" event) and have not
+  // been focused since. Tracked here because the toplevel's own urgent flag
+  // does not notify the dock when it changes.
+  property var urgentAddresses: ({})
+
+  function bareAddress(address) {
+    var text = String(address || "")
+    return text.indexOf("0x") === 0 ? text.slice(2) : text
+  }
+
+  function setUrgent(address, on) {
+    var key = root.bareAddress(address)
+    if (!key || !!root.urgentAddresses[key] === on) return
+    var next = Object.assign({}, root.urgentAddresses)
+    if (on) next[key] = true
+    else delete next[key]
+    root.urgentAddresses = next
   }
 
   readonly property var itemsByKey: {
@@ -357,6 +378,9 @@ Item {
     function onRawEvent(event) {
       var name = event ? String(event.name) : ""
       if (name === "configreloaded") root.refresh()
+      else if (name === "urgent") root.setUrgent(String(event.data), true)
+      else if (name === "activewindowv2") root.setUrgent(String(event.data), false)
+      else if (name === "closewindow") root.setUrgent(String(event.data), false)
       // Hyprland's window and workspace lists do not follow fullscreen on
       // their own.
       else if (name === "fullscreen") {
