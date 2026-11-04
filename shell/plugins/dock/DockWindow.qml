@@ -543,7 +543,8 @@ PanelWindow {
     // An app asking for attention gets a pulsing glow behind its icon until
     // one of its windows is focused.
     Rectangle {
-      readonly property int pad: Math.round(window.iconInset * 2 / 3)
+      // Kept clear of the window dots below the icon.
+      readonly property int pad: Math.max(2, Math.round(window.iconInset / 2))
       x: window.iconX - pad
       y: window.iconY - pad
       width: window.iconSize + pad * 2
@@ -571,6 +572,7 @@ PanelWindow {
     // Running apps are drawn in full, pinned ones that are not running faded,
     // and one that is starting pulses between the two.
     Image {
+      id: appIcon
       x: window.iconX
       y: window.iconY
       width: window.iconSize
@@ -603,7 +605,9 @@ PanelWindow {
       readonly property int edge: Math.max(1, Math.round((window.iconInset + window.dotRoom - dot) / 2))
 
       visible: appSlot.windowCount > 0
-      columns: window.vertical ? 1 : 3
+      // Only as many columns as dots: an empty column still takes up spacing
+      // and would pull the dots off center.
+      columns: window.vertical ? 1 : Math.max(1, Math.min(3, appSlot.windowCount))
       spacing: Math.max(2, Math.round(dot * 0.6))
       x: window.position === "left" ? edge
         : window.position === "right" ? appSlot.width - width - edge
