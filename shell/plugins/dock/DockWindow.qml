@@ -103,6 +103,10 @@ PanelWindow {
   readonly property int tooltipDelay: Math.max(0, setting("tooltip", "delay", 450))
   readonly property bool previewsEnabled: setting("tooltip", "previews", true)
   readonly property int previewsMax: Math.max(1, setting("tooltip", "maxPreviews", 6))
+  // A slim frame around each preview, so a window the same color as the
+  // popup still reads as a window.
+  readonly property int previewBorderWidth: Math.max(0, setting("tooltip", "previewBorderWidth", 1))
+  readonly property color previewBorderColor: readable(themeColor(setting("tooltip", "previewBorderColor", "muted"), "muted"), Commons.Color.popups.background, partContrast)
 
   readonly property string position: dock ? dock.position : "bottom"
   readonly property bool vertical: dock ? dock.vertical : false
@@ -955,6 +959,17 @@ PanelWindow {
           live: tip.visible && window.previewsEnabled
           paintCursor: false
           visible: hasContent
+        }
+
+        Rectangle {
+          anchors.fill: parent
+          anchors.margins: -border.width
+          visible: window.previewBorderWidth > 0
+          color: "transparent"
+          radius: Math.max(2, Style.cornerRadius / 2)
+          border.width: window.previewBorderWidth
+          border.color: window.previewBorderColor
+          z: 1
         }
 
         // Minimized windows, and any the compositor won't capture, show the
