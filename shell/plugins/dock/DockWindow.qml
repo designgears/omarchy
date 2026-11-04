@@ -53,6 +53,12 @@ PanelWindow {
   // straight to the edge of the dock.
   readonly property int iconInset: Style.spacing.md
   readonly property int slotSize: iconSize + iconInset * 2
+  // Extra room on the screen-edge side of each slot, where the window dots sit.
+  readonly property int dotRoom: Style.space(5)
+  // A slot's depth across the dock, and where its icon sits in it.
+  readonly property int slotDepth: slotSize + dotRoom
+  readonly property int iconX: iconInset + (position === "left" ? dotRoom : 0)
+  readonly property int iconY: iconInset + (position === "top" ? dotRoom : 0)
   // A pinned app that is not running is drawn faded.
   readonly property real idleOpacity: 0.7
   // Room inward of the dock for its menus: the tallest, the apps button's,
@@ -238,8 +244,8 @@ PanelWindow {
     right: window.position !== "left"
   }
 
-  implicitWidth: window.vertical ? window.gap + window.slotSize + window.popupRoom : 0
-  implicitHeight: window.vertical ? 0 : window.gap + window.slotSize + window.popupRoom
+  implicitWidth: window.vertical ? window.gap + window.slotDepth + window.popupRoom : 0
+  implicitHeight: window.vertical ? 0 : window.gap + window.slotDepth + window.popupRoom
 
   mask: Region {
     item: window.contentShown ? body : null
@@ -304,7 +310,7 @@ PanelWindow {
     // How far the dock is tucked past its edge. Auto-hide slides it, but only
     // while the dock is on screen: arriving on a floating workspace shows it
     // where it belongs at once.
-    property real tuck: window.tucked ? window.slotSize + window.gap : 0
+    property real tuck: window.tucked ? window.slotDepth + window.gap : 0
 
     // Tucking away is quicker than coming back. A gentler curve than
     // Style.easeOut, which crosses the short slide in a frame or two.
@@ -365,8 +371,8 @@ PanelWindow {
     property bool pressed: mouse.pressed
     property alias mouse: mouse
 
-    width: window.slotSize
-    height: window.slotSize
+    width: window.vertical ? window.slotDepth : window.slotSize
+    height: window.vertical ? window.slotSize : window.slotDepth
 
     MouseArea {
       id: mouse
@@ -405,8 +411,8 @@ PanelWindow {
     // rather than taken from a font, so its edges stay crisp on the
     // transparent dock and it fills its slot like the app icons beside it.
     Item {
-      x: window.iconInset
-      y: window.iconInset
+      x: window.iconX
+      y: window.iconY
       width: window.iconSize
       height: window.iconSize
       scale: appsSlot.hovered ? 1.15 : 1
@@ -447,8 +453,8 @@ PanelWindow {
     property bool dragged: false
     readonly property int windowCount: modelData ? modelData.windows.length : 0
     readonly property bool urgent: !!modelData && modelData.windows.some(function(w) { return w.urgent })
-    // A fixed red, because some themes' urgent color is too muted to catch the eye.
-    readonly property color attentionColor: "#f04a4a"
+    // The theme's urgent color, for attention and unread counts.
+    readonly property color attentionColor: Commons.Color.urgent
     property real glow: 0
     readonly property int unread: window.dock ? window.dock.badgeFor(key) : 0
     property real pulse: 1
@@ -537,10 +543,11 @@ PanelWindow {
     // An app asking for attention gets a pulsing glow behind its icon until
     // one of its windows is focused.
     Rectangle {
-      x: Math.round(window.iconInset / 3)
-      y: Math.round(window.iconInset / 3)
-      width: appSlot.width - x * 2
-      height: appSlot.height - y * 2
+      readonly property int pad: Math.round(window.iconInset * 2 / 3)
+      x: window.iconX - pad
+      y: window.iconY - pad
+      width: window.iconSize + pad * 2
+      height: window.iconSize + pad * 2
       radius: Style.cornerRadius + Math.round(window.iconInset / 3)
       visible: appSlot.urgent
       color: Qt.rgba(appSlot.attentionColor.r, appSlot.attentionColor.g, appSlot.attentionColor.b, 0.25 + 0.35 * appSlot.glow)
@@ -564,8 +571,8 @@ PanelWindow {
     // Running apps are drawn in full, pinned ones that are not running faded,
     // and one that is starting pulses between the two.
     Image {
-      x: window.iconInset
-      y: window.iconInset
+      x: window.iconX
+      y: window.iconY
       width: window.iconSize
       height: window.iconSize
       sourceSize: Qt.size(window.iconSize * 2, window.iconSize * 2)
@@ -590,18 +597,20 @@ PanelWindow {
     Grid {
       id: windowDots
 
-      readonly property int dot: Math.max(4, Math.round(window.iconSize * 0.14))
-      readonly property int edge: Math.max(1, Math.round((window.iconInset - dot) / 2))
+      // Even, so it centers exactly under an icon in an even-width slot.
+      readonly property int dot: 2 * Math.max(2, Math.round(window.iconSize * 0.07))
+      // Centered in the space between the icon and the dock's edge.
+      readonly property int edge: Math.max(1, Math.round((window.iconInset + window.dotRoom - dot) / 2))
 
       visible: appSlot.windowCount > 0
       columns: window.vertical ? 1 : 3
       spacing: Math.max(2, Math.round(dot * 0.6))
       x: window.position === "left" ? edge
         : window.position === "right" ? appSlot.width - width - edge
-        : Math.round((appSlot.width - width) / 2)
+        : window.iconX + (window.iconSize - width) / 2
       y: window.position === "top" ? edge
         : window.position === "bottom" ? appSlot.height - height - edge
-        : Math.round((appSlot.height - height) / 2)
+        : window.iconY + (window.iconSize - height) / 2
       transform: Translate {
         x: window.vertical ? 0 : appSlot.displayedShift
         y: window.vertical ? appSlot.displayedShift : 0
@@ -617,7 +626,7 @@ PanelWindow {
           color: Commons.Color.bar.text
           // Outlined, so the dot shows on light and dark wallpapers alike.
           border.width: 1
-          border.color: Qt.rgba(0, 0, 0, 0.55)
+          border.color: Qt.rgba(Commons.Color.background.r, Commons.Color.background.g, Commons.Color.background.b, 0.6)
         }
       }
     }
@@ -634,9 +643,9 @@ PanelWindow {
       radius: size / 2
       color: appSlot.attentionColor
       border.width: 1
-      border.color: Qt.rgba(0, 0, 0, 0.35)
-      x: window.iconInset + window.iconSize - width + Math.round(size * 0.35)
-      y: window.iconInset - Math.round(size * 0.35)
+      border.color: Qt.rgba(Commons.Color.background.r, Commons.Color.background.g, Commons.Color.background.b, 0.5)
+      x: window.iconX + window.iconSize - width + Math.round(size * 0.35)
+      y: window.iconY - Math.round(size * 0.35)
       z: 2
       transform: Translate {
         x: window.vertical ? 0 : appSlot.displayedShift
@@ -648,7 +657,7 @@ PanelWindow {
         anchors.centerIn: parent
         textFormat: Text.PlainText
         text: appSlot.unread > 99 ? "99+" : String(appSlot.unread)
-        color: "white"
+        color: Commons.Color.background
         font.family: Style.font.family
         font.pixelSize: Math.round(unreadBadge.size * 0.68)
         font.bold: true
@@ -802,7 +811,7 @@ PanelWindow {
     radius: Style.cornerRadius
     color: cardMouse.containsMouse ? Style.hoverFill : "transparent"
     border.width: card.modelData && card.modelData.urgent ? Math.max(1, Style.space(2)) : 0
-    border.color: "#f04a4a"
+    border.color: Commons.Color.urgent
 
     Column {
       id: cardColumn
