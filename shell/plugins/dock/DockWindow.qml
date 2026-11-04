@@ -417,6 +417,7 @@ PanelWindow {
     // A fixed red, because some themes' urgent color is too muted to catch the eye.
     readonly property color attentionColor: "#f04a4a"
     property real glow: 0
+    readonly property int unread: window.dock ? window.dock.badgeFor(key) : 0
     property real pulse: 1
 
     // Slots between where the dragged app was and where it would land step
@@ -582,6 +583,39 @@ PanelWindow {
           border.width: 1
           border.color: Qt.rgba(0, 0, 0, 0.55)
         }
+      }
+    }
+
+    // The app's unread count, in a bubble on the icon's top corner.
+    Rectangle {
+      id: unreadBadge
+
+      readonly property int size: Math.max(14, Math.round(window.iconSize * 0.42))
+
+      visible: appSlot.unread > 0
+      height: size
+      width: Math.max(size, unreadText.implicitWidth + Math.round(size * 0.5))
+      radius: size / 2
+      color: appSlot.attentionColor
+      border.width: 1
+      border.color: Qt.rgba(0, 0, 0, 0.35)
+      x: window.iconInset + window.iconSize - width + Math.round(size * 0.35)
+      y: window.iconInset - Math.round(size * 0.35)
+      z: 2
+      transform: Translate {
+        x: window.vertical ? 0 : appSlot.displayedShift
+        y: window.vertical ? appSlot.displayedShift : 0
+      }
+
+      Text {
+        id: unreadText
+        anchors.centerIn: parent
+        textFormat: Text.PlainText
+        text: appSlot.unread > 99 ? "99+" : String(appSlot.unread)
+        color: "white"
+        font.family: Style.font.family
+        font.pixelSize: Math.round(unreadBadge.size * 0.68)
+        font.bold: true
       }
     }
 

@@ -106,6 +106,41 @@ Item {
     root.urgentAddresses = next
   }
 
+  // Unread counts apps publish over D-Bus (the Unity launcher API that
+  // Telegram and Electron apps use), keyed by desktop id. A small helper
+  // listens for them and prints one JSON line per change.
+  property var badges: ({})
+
+  function badgeFor(key) {
+    var badge = root.badges[key]
+    return badge && badge.visible && badge.count > 0 ? badge.count : 0
+  }
+
+  Process {
+    id: badgeProc
+    running: true
+    command: ["python3", "-I", String(Qt.resolvedUrl("launcher-badges.py")).replace(/^file:\/\//, "")]
+    stdout: SplitParser {
+      onRead: function(line) {
+        var update
+        try { update = JSON.parse(line) } catch (e) { return }
+        if (!update || !update.app) return
+        var entry = DesktopEntries.byId(update.app) || root.entryForAppId(update.app)
+        var next = Object.assign({}, root.badges)
+        next[entry ? entry.id : update.app] = { count: update.count, visible: update.visible }
+        root.badges = next
+      }
+    }
+    // Restart the listener if it ever stops.
+    onExited: badgeRestart.start()
+  }
+
+  Timer {
+    id: badgeRestart
+    interval: 5000
+    onTriggered: badgeProc.running = true
+  }
+
   readonly property var itemsByKey: {
     var byKey = {}
     for (var i = 0; i < root.items.length; i++) byKey[root.items[i].key] = root.items[i]
