@@ -105,15 +105,23 @@ PanelWindow {
   readonly property int previewsMax: Math.max(1, setting("tooltip", "maxPreviews", 6))
   // A slim frame around each preview, so a window the same color as the
   // popup still reads as a window.
+  // The hover popup's colors: theme roles or hex, contrast-checked.
+  readonly property color popupBackground: themeColor(setting("popup", "background", "background"), "background")
+  readonly property color popupBorder: readable(themeColor(setting("popup", "border", "accent"), "accent"), popupBackground, partContrast)
+  readonly property color popupText: readable(themeColor(setting("popup", "text", "foreground"), "foreground"), popupBackground, textContrast)
+  readonly property color popupTitle: readable(themeColor(setting("popup", "title", "accent"), "accent"), popupBackground, textContrast)
+  // The preview under the pointer: its frame, and a faint wash behind it.
+  readonly property color popupHover: readable(themeColor(setting("popup", "hover", "accent"), "accent"), popupBackground, partContrast)
+
   // "hover" shows each preview's close button while the pointer is on it,
   // "always" keeps it shown, "off" hides it.
   readonly property string previewClose: setting("tooltip", "closeButton", "hover")
-  readonly property color closeFill: Commons.Color.popups.background
-  readonly property color closeGlyph: readable(Commons.Color.foreground, closeFill, textContrast)
-  readonly property color closeHoverFill: Commons.Color.urgent
+  readonly property color closeFill: popupBackground
+  readonly property color closeGlyph: popupText
+  readonly property color closeHoverFill: popupHover
   readonly property color closeHoverGlyph: readable(Commons.Color.background, closeHoverFill, textContrast)
   readonly property int previewBorderWidth: Math.max(0, setting("tooltip", "previewBorderWidth", 1))
-  readonly property color previewBorderColor: readable(themeColor(setting("tooltip", "previewBorderColor", "muted"), "muted"), Commons.Color.popups.background, partContrast)
+  readonly property color previewBorderColor: readable(themeColor(setting("tooltip", "previewBorderColor", "muted"), "muted"), popupBackground, partContrast)
 
   readonly property string position: dock ? dock.position : "bottom"
   readonly property bool vertical: dock ? dock.vertical : false
@@ -888,8 +896,9 @@ PanelWindow {
     x: window.popupX(window.tipSlot, tip, window.popClearance)
     y: window.popupY(window.tipSlot, tip, window.popClearance)
     radius: Style.cornerRadius
-    color: Commons.Color.popups.background
-    borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border, Style.normalBorderWidth)
+    color: window.popupBackground
+    // A section the theme doesn't define, so the dock's own color is used.
+    borderSpec: Border.surfaceSpec("dock-popup", "border", window.popupBorder, Style.normalBorderWidth)
     padding: Style.spacing.sm
 
     Column {
@@ -904,7 +913,7 @@ PanelWindow {
         textFormat: Text.PlainText
         text: tip.appName
         elide: Text.ElideRight
-        color: Commons.Color.popups.text
+        color: window.popupTitle
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         font.bold: true
@@ -944,9 +953,10 @@ PanelWindow {
     width: textWidth + Style.spacing.xs * 2
     height: cardColumn.implicitHeight + Style.spacing.xs * 2
     radius: Style.cornerRadius
-    color: cardMouse.containsMouse ? Style.hoverFill : "transparent"
+    readonly property bool active: cardMouse.containsMouse || closeMouse.containsMouse
+    color: active ? Qt.rgba(window.popupHover.r, window.popupHover.g, window.popupHover.b, 0.12) : "transparent"
     border.width: card.modelData && card.modelData.urgent ? Math.max(1, Style.space(2)) : 0
-    border.color: Commons.Color.urgent
+    border.color: window.attentionColor
 
     Column {
       id: cardColumn
@@ -975,7 +985,7 @@ PanelWindow {
           color: "transparent"
           radius: Math.max(2, Style.cornerRadius / 2)
           border.width: window.previewBorderWidth
-          border.color: window.previewBorderColor
+          border.color: card.active ? window.popupHover : window.previewBorderColor
           z: 1
         }
 
@@ -1000,7 +1010,7 @@ PanelWindow {
         text: card.toplevel && card.toplevel.title ? card.toplevel.title : tip.appName
         elide: Text.ElideRight
         horizontalAlignment: window.previewsEnabled ? Text.AlignHCenter : Text.AlignLeft
-        color: Commons.Color.popups.text
+        color: window.popupText
         opacity: 0.8
         font.family: Style.font.family
         font.pixelSize: Style.font.body
