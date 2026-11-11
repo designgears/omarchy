@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons
 import "DockModel.js" as DockModel
+import "file:///usr/share/omarchy/shell/services" as OmarchyServices
 
 // An app dock that shows on floating workspaces. A floating workspace has no
 // tiles to hand the apps out, so the dock gives back a place to find them:
@@ -14,7 +15,10 @@ Item {
   property var shell: null
   property var manifest: null
 
-  readonly property var appLibrary: shell ? shell.appLibrary : null
+  // A user plugin is not handed the shell's app library (only built-ins and
+  // "menu" plugins are), so the app grid gets its own copy of the service.
+  readonly property var appLibrary: shell && shell.appLibrary ? shell.appLibrary : localAppLibrary
+  OmarchyServices.AppLibrary { id: localAppLibrary }
   readonly property var dockConfig: shell && shell.shellConfig && shell.shellConfig.dock ? shell.shellConfig.dock : ({})
   readonly property var defaultDockConfig: shell && shell.defaultsConfig && shell.defaultsConfig.dock ? shell.defaultsConfig.dock : ({})
   readonly property string position: DockModel.normalizePosition(dockConfig.position)
@@ -68,7 +72,9 @@ Item {
       var workspace = toplevels[i].workspace
       windows.push({
         key: entry ? entry.id : toplevel.appId,
-        hasEntry: !!entry && !entry.noDisplay,
+        // An app may claim its app id with a hidden desktop file of its own
+        // (e.g. a URL-handler entry); its window still belongs in the dock.
+        hasEntry: !!entry,
         workspaceId: workspace ? workspace.id : -1,
         minimized: !!workspace && DockModel.isMinimizedWorkspace(workspace.name),
         address: toplevels[i].address,
@@ -176,6 +182,8 @@ Item {
       root.launch(item)
       return
     }
+    // Clicking the app that is already focused minimizes it.
+    if (root.minimizeFocused(item)) return
     var monitor = Hyprland.focusedMonitor
     var workspaceId = monitor && monitor.activeWorkspace ? monitor.activeWorkspace.id : -1
     var index = DockModel.pickWindow(item.windows.map(function(window) {
@@ -211,6 +219,20 @@ Item {
     var command = steps.map(dispatch).join(" && ")
     if (after.length > 0) command += "; sleep 0.4; " + after.map(dispatch).join("; ")
     Util.execDetached(command)
+  }
+
+  // Minimize the app's window if it is the focused one; returns true if it did.
+  function minimizeFocused(item) {
+    for (var i = 0; i < item.windows.length; i++) {
+      var w = item.windows[i]
+      if (w.minimized || !w.toplevel || !w.toplevel.activated) continue
+      var address = String(w.address || "")
+      if (!address) return false
+      if (address.indexOf("0x") !== 0) address = "0x" + address
+      Util.execDetached("omarchy-hyprland-window-minimize " + Util.shellQuote(address))
+      return true
+    }
+    return false
   }
 
   function quit(item) {
