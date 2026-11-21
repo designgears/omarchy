@@ -163,8 +163,8 @@ PanelWindow {
   readonly property int slotDepth: slotSize + dotRoom
   readonly property int iconX: iconInset + (position === "left" ? dotRoom : 0)
   readonly property int iconY: iconInset + (position === "top" ? dotRoom : 0)
-  // A pinned app that is not running is drawn faded.
-  readonly property real idleOpacity: 0.7
+  // An app that is starting pulses down to this.
+  readonly property real pulseOpacity: 0.7
   // Room inward of the dock for its menus: the tallest, the apps button's,
   // has five rows.
   readonly property int popupRoom: Math.max(Style.spacing.popupRowHeight * 5 + Style.spacing.sm * 2 + Style.normalBorderWidth * 2,
@@ -688,8 +688,7 @@ PanelWindow {
       NumberAnimation { target: appSlot; property: "glow"; to: 0; duration: Style.duration(window.attentionPeriod / 2); easing.type: Easing.InOutSine }
     }
 
-    // Running apps are drawn in full, pinned ones that are not running faded,
-    // and one that is starting pulses between the two.
+    // Apps are drawn in full, running or not, and one that is starting pulses.
     Image {
       id: appIcon
       x: window.iconX
@@ -702,7 +701,7 @@ PanelWindow {
       asynchronous: true
       smooth: true
       mipmap: true
-      opacity: appSlot.launching ? appSlot.pulse : (appSlot.windowCount > 0 ? 1 : window.idleOpacity)
+      opacity: appSlot.launching ? appSlot.pulse : 1
       transform: Translate {
         x: window.vertical ? 0 : appSlot.displayedShift
         y: window.vertical ? appSlot.displayedShift : 0
@@ -811,7 +810,7 @@ PanelWindow {
       loops: Animation.Infinite
       onRunningChanged: if (!running) appSlot.pulse = 1
 
-      NumberAnimation { target: appSlot; property: "pulse"; from: 1; to: window.idleOpacity; duration: Style.duration(500); easing.type: Easing.InOutSine }
+      NumberAnimation { target: appSlot; property: "pulse"; from: 1; to: window.pulseOpacity; duration: Style.duration(500); easing.type: Easing.InOutSine }
       NumberAnimation { target: appSlot; property: "pulse"; to: 1; duration: Style.duration(500); easing.type: Easing.InOutSine }
     }
   }
