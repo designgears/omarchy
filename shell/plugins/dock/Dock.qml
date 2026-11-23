@@ -235,9 +235,19 @@ Item {
     return item ? DesktopEntries.byId(item.key) : null
   }
 
+  // A rounded tile with the title's first letter, for windows with no app id.
+  function letterIcon(title) {
+    var letter = (String(title || "?").trim().charAt(0) || "?").toUpperCase().replace(/[<>&"']/g, "?")
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
+      + "<rect x='4' y='4' width='56' height='56' rx='14' fill='#5a5f73'/>"
+      + "<text x='32' y='44' font-family='sans-serif' font-weight='bold' font-size='32' fill='#ffffff' text-anchor='middle'>" + letter + "</text></svg>"
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg)
+  }
+
   function iconFor(item) {
     var entry = entryFor(item)
-    var icon = entry && entry.icon ? entry.icon : (item && String(item.key).indexOf("window:") === 0 ? "application-x-executable" : (item ? item.key : ""))
+    if (!entry && item && String(item.key).indexOf("window:") === 0) return root.letterIcon(item.windows.length ? item.windows[0].title : "")
+    var icon = entry && entry.icon ? entry.icon : (item ? item.key : "")
     return root.appLibrary ? root.appLibrary.iconSource(icon) : Quickshell.iconPath(icon, true)
   }
 
