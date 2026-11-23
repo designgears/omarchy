@@ -945,7 +945,8 @@ PanelWindow {
 
     readonly property var item: window.tipSlot ? window.tipSlot.modelData : null
     readonly property var entry: item && window.dock ? window.dock.entryFor(item) : null
-    readonly property string appName: entry && entry.name ? entry.name : (item ? item.key : "")
+    readonly property string appName: entry && entry.name ? entry.name
+      : (item && String(item.key).indexOf("window:") === 0 && item.windows.length ? (item.windows[0].title || "Window") : (item ? item.key : ""))
     readonly property var windows: item ? item.windows.slice(0, window.previewsMax) : []
     readonly property int maxWidth: window.width - window.gap * 2
     readonly property int textRoom: maxWidth - padding * 2 - Style.spacing.controlPaddingX * 2

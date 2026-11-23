@@ -37,7 +37,7 @@ function pinnedIds(dockConfig, defaultsConfig) {
 function isDockWindow(window) {
   if (!window || !window.key) return false
   if (window.minimized === true) return true
-  return window.hasEntry === true && window.workspaceId >= 1
+  return (window.hasEntry === true || window.anonymous === true) && window.workspaceId >= 1
 }
 
 // Minimizing moves a window to this special workspace, and the dock brings it

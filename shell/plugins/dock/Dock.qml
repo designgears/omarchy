@@ -85,11 +85,15 @@ Item {
     var toplevels = Hyprland.toplevels.values
     for (var i = 0; i < toplevels.length; i++) {
       var toplevel = toplevels[i].wayland
-      if (!toplevel || !toplevel.appId || toplevel.parent) continue
-      var entry = root.entryForAppId(toplevel.appId)
+      if (!toplevel || toplevel.parent) continue
+      // Apps that never set an app id (e.g. some winit apps) still get a slot,
+      // one per window, named after the window title.
+      var anonymous = !toplevel.appId
+      var entry = anonymous ? null : root.entryForAppId(toplevel.appId)
       var workspace = toplevels[i].workspace
       windows.push({
-        key: entry ? entry.id : toplevel.appId,
+        key: entry ? entry.id : (anonymous ? "window:" + toplevels[i].address : toplevel.appId),
+        anonymous: anonymous,
         // An app may claim its app id with a hidden desktop file of its own
         // (e.g. a URL-handler entry); its window still belongs in the dock.
         hasEntry: !!entry,
@@ -233,7 +237,7 @@ Item {
 
   function iconFor(item) {
     var entry = entryFor(item)
-    var icon = entry && entry.icon ? entry.icon : (item ? item.key : "")
+    var icon = entry && entry.icon ? entry.icon : (item && String(item.key).indexOf("window:") === 0 ? "application-x-executable" : (item ? item.key : ""))
     return root.appLibrary ? root.appLibrary.iconSource(icon) : Quickshell.iconPath(icon, true)
   }
 
